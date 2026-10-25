@@ -1,0 +1,6 @@
+{
+  "name": "Focus Classes",
+  "description": "Internal student management and weekly performance evaluation system for Focus Classes coaching institute.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

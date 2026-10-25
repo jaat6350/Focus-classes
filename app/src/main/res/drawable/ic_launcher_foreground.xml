@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Graduation Cap Top Diamond -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 L82,40 L54,52 L26,40 Z" />
+    <!-- Cap Base Arc -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M35,44.5 L35,53 C35,60 73,60 73,53 L73,44.5 C68,48 59,50 54,50 C49,50 40,48 35,44.5 Z" />
+    <!-- Golden Tassel -->
+    <path
+        android:fillColor="#FFC928"
+        android:pathData="M72,42 L77,48 L77,58 C76,59 75,61 75,63 C77,63 79,63 79,61 C79,59 78,58 78,58 L78,47 L74,41 Z" />
+    <!-- Open Book Pages Left & Right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,65 C43,62 34,62 26,64 C25,64.2 24,65 24,66 L24,78 C24,79 25,80 26,79.8 C33,78 42,78 51,81 C51.6,81.2 52.4,81.2 53,81 C62,78 71,78 78,79.8 C79,80 80,79 80,78 L80,66 C80,65 79,64.2 78,64 C70,62 61,62 52,65 Z" />
+    <!-- Book Spine / Center Divider -->
+    <path
+        android:fillColor="#FFC928"
+        android:pathData="M52.5,65 L55.5,65 L55.5,82 L52.5,82 Z" />
+</vector>
