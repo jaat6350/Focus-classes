@@ -412,16 +412,25 @@ fun StudentProfileScreen(
                         Spacer(modifier = Modifier.height(18.dp))
 
                         // Overall Summary Card
-                        val isComplete = att != null && testMarks != null && disc != null && proj != null
-                        if (isComplete) {
-                            val attPct = (att / 6.0) * 100.0
-                            val testPct = (testMarks / testMax) * 100.0
-                            val discPct = (disc / 4.0) * 100.0
-                            val projPct = (proj / 10.0) * 100.0
-                            val overall = (attPct * config.attendanceWeight +
-                                    testPct * config.testWeight +
-                                    discPct * config.disciplineWeight +
-                                    projPct * config.projectWeight) / 100.0
+                        // Overall Summary Card
+                        val totalObtained = (att ?: 0.0) +
+                                (testMarks ?: 0.0) +
+                                (disc ?: 0.0) +
+                                (proj ?: 0.0) +
+                                customCategories.sumOf { customMarksMap[it.id] ?: 0.0 }
+
+                        val totalMax = 6.0 + testMax + 4.0 + 10.0 + customCategories.sumOf { it.maxMarks }
+
+                        val isComplete = att != null && testMarks != null && disc != null && proj != null &&
+                                customCategories.all { customMarksMap[it.id] != null }
+
+                        val hasAnyMark = att != null || testMarks != null || disc != null || proj != null ||
+                                customMarksMap.isNotEmpty()
+
+                        if (hasAnyMark && totalMax > 0) {
+                            val overall = (totalObtained / totalMax) * 100.0
+                            val obtainedStr = if (totalObtained % 1.0 == 0.0) totalObtained.toInt().toString() else String.format(Locale.US, "%.1f", totalObtained)
+                            val maxStr = if (totalMax % 1.0 == 0.0) totalMax.toInt().toString() else String.format(Locale.US, "%.1f", totalMax)
 
                             Row(
                                 modifier = Modifier
@@ -434,20 +443,23 @@ fun StudentProfileScreen(
                                 Column {
                                     Text("Overall Score", fontSize = 13.sp, color = FocusTextSecondary)
                                     Text(
-                                        text = String.format(Locale.US, "%.1f%%", overall),
-                                        fontSize = 20.sp,
+                                        text = String.format(Locale.US, "%.1f%% (%s / %s)", overall, obtainedStr, maxStr),
+                                        fontSize = 18.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = FocusPrimaryBlue
                                     )
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .background(FocusGold.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (isComplete) FocusGold.copy(alpha = 0.2f) else Color(0xFFE2E8F0),
+                                            RoundedCornerShape(6.dp)
+                                        )
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = "Complete",
-                                        color = Color(0xFFB45309),
+                                        text = if (isComplete) "Complete" else "In Progress",
+                                        color = if (isComplete) Color(0xFFB45309) else FocusTextDark,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )

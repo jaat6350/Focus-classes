@@ -121,8 +121,8 @@ fun SettingsScreen(
 
             item {
                 SettingsCardItem(
-                    title = "Category Weights & Scoring",
-                    subtitle = "Attendance (${config.attendanceWeight.toInt()}%), Test (${config.testWeight.toInt()}%), Discipline (${config.disciplineWeight.toInt()}%), Project (${config.projectWeight.toInt()}%)",
+                    title = "Scoring & Percentage System",
+                    subtitle = "Proportional: Percentage = (Total Marks Obtained / Sum of Category Max Marks) × 100%",
                     icon = Icons.Default.Tune,
                     onClick = { showWeightsDialog = true }
                 )
@@ -192,84 +192,35 @@ fun SettingsScreen(
         }
     }
 
-    // Category Weights Dialog
+    // Scoring System Dialog
     if (showWeightsDialog) {
-        var attWeight by remember { mutableStateOf(config.attendanceWeight.toInt().toString()) }
-        var testWeight by remember { mutableStateOf(config.testWeight.toInt().toString()) }
-        var discWeight by remember { mutableStateOf(config.disciplineWeight.toInt().toString()) }
-        var projWeight by remember { mutableStateOf(config.projectWeight.toInt().toString()) }
-
         AlertDialog(
             onDismissRequest = { showWeightsDialog = false },
             containerColor = Color.White,
             titleContentColor = FocusTextDark,
             textContentColor = FocusTextDark,
-            title = { Text("Scoring Weights (Total 100%)", fontWeight = FontWeight.Bold) },
+            title = { Text("Proportional Scoring System", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = attWeight,
-                        onValueChange = { attWeight = it },
-                        label = { Text("Attendance Weight %") },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = FocusTextDark, fontSize = 15.sp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = com.example.ui.components.focusTextFieldColors(),
-                        singleLine = true
+                    Text(
+                        text = "Formula: (Total Marks Obtained / Total Maximum Marks) × 100%",
+                        fontWeight = FontWeight.Bold,
+                        color = FocusPrimaryBlue,
+                        fontSize = 14.sp
                     )
-                    OutlinedTextField(
-                        value = testWeight,
-                        onValueChange = { testWeight = it },
-                        label = { Text("Test Marks Weight %") },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = FocusTextDark, fontSize = 15.sp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = com.example.ui.components.focusTextFieldColors(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = discWeight,
-                        onValueChange = { discWeight = it },
-                        label = { Text("Discipline Weight %") },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = FocusTextDark, fontSize = 15.sp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = com.example.ui.components.focusTextFieldColors(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = projWeight,
-                        onValueChange = { projWeight = it },
-                        label = { Text("Project Weight %") },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = FocusTextDark, fontSize = 15.sp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = com.example.ui.components.focusTextFieldColors(),
-                        singleLine = true
+                    Text(
+                        text = "Every category's contribution to the final percentage is proportional to its maximum marks. For example, if total maximum marks across Test (80), Attendance (6), Discipline (4), and Project (10) is 100 marks, scoring 36 marks gives exactly 36%.\n\nAttendance (out of 6) and Discipline (out of 4) are proportional to the total marks, preventing small categories from artificially granting high percentages (like 50%).",
+                        fontSize = 13.sp,
+                        color = FocusTextDark,
+                        lineHeight = 18.sp
                     )
                 }
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        val a = attWeight.toFloatOrNull() ?: 25f
-                        val t = testWeight.toFloatOrNull() ?: 25f
-                        val d = discWeight.toFloatOrNull() ?: 25f
-                        val p = projWeight.toFloatOrNull() ?: 25f
-                        viewModel.updateScoringConfig(
-                            ScoringConfigEntity(
-                                id = 1,
-                                attendanceWeight = a,
-                                testWeight = t,
-                                disciplineWeight = d,
-                                projectWeight = p
-                            )
-                        )
-                        showWeightsDialog = false
-                    }
+                    onClick = { showWeightsDialog = false }
                 ) {
-                    Text("Save Weights", fontWeight = FontWeight.Bold, color = FocusPrimaryBlue)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showWeightsDialog = false }) {
-                    Text("Cancel", color = FocusTextSecondary)
+                    Text("Got It", fontWeight = FontWeight.Bold, color = FocusPrimaryBlue)
                 }
             }
         )

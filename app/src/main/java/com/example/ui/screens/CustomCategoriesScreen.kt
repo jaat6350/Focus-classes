@@ -120,14 +120,15 @@ fun CustomCategoriesScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Add custom evaluation categories beyond default marks. Each category has its own maximum mark, weight %, and leaderboard ranking.",
+                            text = "Add custom evaluation categories beyond default marks. Each category has its own maximum mark which contributes directly to the total marks and overall percentage calculation.",
                             fontSize = 12.sp,
                             color = FocusTextSecondary,
                             lineHeight = 17.sp
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        val totalMaxMarks = categories.sumOf { it.maxMarks }
                         Text(
-                            text = "Total Active Weight: ${totalWeight.toInt()}%",
+                            text = "Total Default Max Marks: ${totalMaxMarks.toInt()}",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = FocusPrimaryBlue

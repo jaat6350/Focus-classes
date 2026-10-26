@@ -38,12 +38,12 @@ class ScoringEngineTest {
         val result = StudentWeeklyResultEntity(
             studentId = 1,
             assessmentId = 1,
-            attendanceMarks = 6.0,   // 6/6 = 100% (weight 20%) -> 20.0
-            testMarks = 18.0,         // 18/20 = 90% (weight 40%) -> 36.0
-            disciplineMarks = 4.0,   // 4/4 = 100% (weight 10%) -> 10.0
-            projectMarks = 8.0       // 8/10 = 80% (weight 10%) -> 8.0
+            attendanceMarks = 6.0,   // 6/6
+            testMarks = 18.0,        // 18/20
+            disciplineMarks = 4.0,   // 4/4
+            projectMarks = 8.0       // 8/10
         )
-        // Custom category marks for Oral Viva (id=5): 9/10 = 90% (weight 20%) -> 18.0
+        // Custom category marks for Oral Viva (id=5): 9/10
         val customMarks = mapOf(5L to 9.0)
 
         val item = StudentWithResult(student, result, assessment, customMarks)
@@ -51,9 +51,60 @@ class ScoringEngineTest {
         assertTrue(item.isAllCategoriesEvaluated(categories))
         val overallPct = item.calculateDynamicOverallPct(categories)
 
-        // Expected weighted overall:
-        // (100 * 20 + 90 * 40 + 100 * 10 + 80 * 10 + 90 * 20) / 100 = (2000 + 3600 + 1000 + 800 + 1800) / 100 = 92.0%
-        assertEquals(92.0, overallPct!!, 0.001)
+        // Proportional overall:
+        // Total obtained: 6 + 18 + 4 + 8 + 9 = 45.0
+        // Total max: 6 + 20 + 4 + 10 + 10 = 50.0
+        // Percentage: (45.0 / 50.0) * 100 = 90.0%
+        assertEquals(90.0, overallPct!!, 0.001)
+    }
+
+    @Test
+    fun testProportionalScoringPreventsArtificiallyHighPercentage() {
+        // User scenario:
+        // Test max marks = 80, Attendance max = 6, Discipline max = 4, Project max = 10.
+        // Total max = 100 marks.
+        val test100Assessment = WeeklyAssessmentEntity(
+            id = 2,
+            batchId = 6,
+            weekLabel = "Week 2",
+            testMaxMarks = 80.0
+        )
+        val test100Categories = listOf(
+            AssessmentCategoryEntity(id = 1, name = "Attendance", maxMarks = 6.0, isSystemDefault = true, systemKey = "ATTENDANCE"),
+            AssessmentCategoryEntity(id = 2, name = "Test Marks", maxMarks = 80.0, isSystemDefault = true, systemKey = "TEST"),
+            AssessmentCategoryEntity(id = 3, name = "Discipline", maxMarks = 4.0, isSystemDefault = true, systemKey = "DISCIPLINE"),
+            AssessmentCategoryEntity(id = 4, name = "Project", maxMarks = 10.0, isSystemDefault = true, systemKey = "PROJECT")
+        )
+
+        // Case 1: Student gets 36 marks out of 100 (6 attendance, 20 test, 4 discipline, 6 project)
+        val s1 = StudentEntity(id = 10, fullName = "Student 36", batchId = 6)
+        val r1 = StudentWeeklyResultEntity(
+            studentId = 10,
+            assessmentId = 2,
+            attendanceMarks = 6.0,
+            testMarks = 20.0,
+            disciplineMarks = 4.0,
+            projectMarks = 6.0
+        )
+        val item1 = StudentWithResult(s1, r1, test100Assessment)
+        val pct1 = item1.calculateDynamicOverallPct(test100Categories)
+        // Total obtained: 6 + 20 + 4 + 6 = 36. Total max: 6 + 80 + 4 + 10 = 100. Pct = 36.0%
+        assertEquals(36.0, pct1!!, 0.001)
+
+        // Case 2: Student gets full marks only in Discipline (4/4) and Attendance (6/6), but 0 in test and project
+        val s2 = StudentEntity(id = 11, fullName = "Student Partial", batchId = 6)
+        val r2 = StudentWeeklyResultEntity(
+            studentId = 11,
+            assessmentId = 2,
+            attendanceMarks = 6.0,
+            testMarks = 0.0,
+            disciplineMarks = 4.0,
+            projectMarks = 0.0
+        )
+        val item2 = StudentWithResult(s2, r2, test100Assessment)
+        val pct2 = item2.calculateDynamicOverallPct(test100Categories)
+        // Total obtained: 6 + 0 + 4 + 0 = 10. Total max: 100. Pct = 10.0%, NOT 50%!
+        assertEquals(10.0, pct2!!, 0.001)
     }
 
     @Test

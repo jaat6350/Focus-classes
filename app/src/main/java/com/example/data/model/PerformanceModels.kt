@@ -33,22 +33,41 @@ data class StudentWithResult(
     val projectPct: Double?
         get() = result?.projectMarks?.let { (it / 10.0) * 100.0 }
 
-    fun getCategoryPercentage(category: AssessmentCategoryEntity): Double? {
-        val marks = when (category.systemKey) {
+    fun getCategoryMarks(category: AssessmentCategoryEntity): Double? {
+        return when (category.systemKey) {
             "ATTENDANCE" -> result?.attendanceMarks
             "TEST" -> result?.testMarks
             "DISCIPLINE" -> result?.disciplineMarks
             "PROJECT" -> result?.projectMarks
             else -> customCategoryMarks[category.id]
-        } ?: return null
+        }
+    }
 
-        val max = if (category.systemKey == "TEST") {
+    fun getCategoryMaxMarks(category: AssessmentCategoryEntity): Double {
+        return if (category.systemKey == "TEST") {
             assessment?.testMaxMarks ?: category.maxMarks
         } else {
             category.maxMarks
         }
+    }
 
+    fun getCategoryPercentage(category: AssessmentCategoryEntity): Double? {
+        val marks = getCategoryMarks(category) ?: return null
+        val max = getCategoryMaxMarks(category)
         return if (max > 0) (marks / max) * 100.0 else 0.0
+    }
+
+    fun getTotalObtainedMarks(categories: List<AssessmentCategoryEntity>): Double {
+        if (categories.isEmpty()) return rawTotalMarks
+        return categories.sumOf { cat -> getCategoryMarks(cat) ?: 0.0 }
+    }
+
+    fun getTotalMaxMarks(categories: List<AssessmentCategoryEntity>): Double {
+        if (categories.isEmpty()) {
+            val testMax = assessment?.testMaxMarks ?: 20.0
+            return 6.0 + testMax + 4.0 + 10.0
+        }
+        return categories.sumOf { cat -> getCategoryMaxMarks(cat) }
     }
 
     fun isAllCategoriesEvaluated(categories: List<AssessmentCategoryEntity>): Boolean {
@@ -58,29 +77,45 @@ data class StudentWithResult(
                     result?.disciplineMarks != null &&
                     result?.projectMarks != null
         }
-        return categories.all { cat ->
-            when (cat.systemKey) {
-                "ATTENDANCE" -> result?.attendanceMarks != null
-                "TEST" -> result?.testMarks != null
-                "DISCIPLINE" -> result?.disciplineMarks != null
-                "PROJECT" -> result?.projectMarks != null
-                else -> customCategoryMarks[cat.id] != null
-            }
-        }
+        return categories.all { cat -> getCategoryMarks(cat) != null }
     }
 
+    fun hasAnyCategoryEvaluated(categories: List<AssessmentCategoryEntity>): Boolean {
+        if (categories.isEmpty()) {
+            return result?.attendanceMarks != null ||
+                    result?.testMarks != null ||
+                    result?.disciplineMarks != null ||
+                    result?.projectMarks != null
+        }
+        return categories.any { cat -> getCategoryMarks(cat) != null }
+    }
+
+    /**
+     * Calculates the overall percentage dynamically:
+     * Percentage = (Sum of marks obtained across all categories) / (Sum of max marks of all categories) * 100.
+     * Ensures categories with smaller max marks (e.g. Discipline out of 4, Attendance out of 6)
+     * are proportional to the total (e.g. out of 100), rather than having an equal 25% weight.
+     */
     fun calculateDynamicOverallPct(categories: List<AssessmentCategoryEntity>): Double? {
         if (categories.isEmpty()) return null
-        var totalWeightedPct = 0.0
-        var totalWeight = 0.0
+        if (!isAllCategoriesEvaluated(categories)) return null
 
-        for (cat in categories) {
-            val pct = getCategoryPercentage(cat) ?: return null
-            totalWeightedPct += (pct * cat.weight)
-            totalWeight += cat.weight
-        }
+        val totalMax = getTotalMaxMarks(categories)
+        if (totalMax <= 0.0) return 0.0
 
-        return if (totalWeight > 0) totalWeightedPct / totalWeight else null
+        val totalObtained = getTotalObtainedMarks(categories)
+        return (totalObtained / totalMax) * 100.0
+    }
+
+    fun calculateProvisionalOverallPct(categories: List<AssessmentCategoryEntity>): Double? {
+        if (categories.isEmpty()) return null
+        if (!hasAnyCategoryEvaluated(categories)) return null
+
+        val totalMax = getTotalMaxMarks(categories)
+        if (totalMax <= 0.0) return 0.0
+
+        val totalObtained = getTotalObtainedMarks(categories)
+        return (totalObtained / totalMax) * 100.0
     }
 
     val isComplete: Boolean
@@ -130,15 +165,24 @@ object ScoringEngine {
             val display: String
 
             if (filter.id == "OVERALL") {
-                val overallPct = item.calculateDynamicOverallPct(activeCategories)
                 val complete = item.isAllCategoriesEvaluated(activeCategories)
-                score = overallPct ?: -1.0
-                display = if (complete && score >= 0) {
-                    String.format(Locale.US, "%.0f%%", score)
-                } else if (score >= 0) {
-                    String.format(Locale.US, "%.0f%% (Inc)", score)
+                val overallPct = item.calculateDynamicOverallPct(activeCategories)
+                val provPct = item.calculateProvisionalOverallPct(activeCategories)
+                val totalObtained = item.getTotalObtainedMarks(activeCategories)
+                val totalMax = item.getTotalMaxMarks(activeCategories)
+
+                val obtainedStr = if (totalObtained % 1.0 == 0.0) totalObtained.toInt().toString() else String.format(Locale.US, "%.1f", totalObtained)
+                val maxStr = if (totalMax % 1.0 == 0.0) totalMax.toInt().toString() else String.format(Locale.US, "%.1f", totalMax)
+
+                if (complete && overallPct != null) {
+                    score = overallPct
+                    display = String.format(Locale.US, "%.0f%% (%s/%s)", overallPct, obtainedStr, maxStr)
+                } else if (provPct != null) {
+                    score = provPct
+                    display = String.format(Locale.US, "%.0f%% Inc (%s/%s)", provPct, obtainedStr, maxStr)
                 } else {
-                    "Pending"
+                    score = -1.0
+                    display = "Pending"
                 }
             } else if (filter.customCategoryId != null) {
                 val cat = activeCategories.find { it.id == filter.customCategoryId }
