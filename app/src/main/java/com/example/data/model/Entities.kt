@@ -121,14 +121,17 @@ data class StudentCategoryMarkEntity(
 enum class AttendanceStatus(val label: String, val score: Double) {
     PRESENT("Present", 1.0),
     LATE("Late", 0.5),
-    ABSENT("Absent", 0.0)
+    ABSENT("Absent", 0.0),
+    LEAVE("Leave", 0.0)
 }
 
 @Entity(
     tableName = "daily_attendance",
     indices = [
-        Index(value = ["studentId", "assessmentId", "dayOfWeek"], unique = true),
-        Index(value = ["batchId", "assessmentId", "dayOfWeek"])
+        Index(value = ["studentId", "dateString"], unique = true),
+        Index(value = ["batchId", "dateString"]),
+        Index(value = ["assessmentId"]),
+        Index(value = ["studentId", "assessmentId"])
     ]
 )
 data class DailyAttendanceEntity(
@@ -136,9 +139,11 @@ data class DailyAttendanceEntity(
     val id: Long = 0,
     val studentId: Long,
     val batchId: Long,
-    val assessmentId: Long,
-    val dayOfWeek: Int, // 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+    val assessmentId: Long = 0,
+    val dateString: String = "", // "yyyy-MM-dd"
+    val dayOfWeek: Int = 1, // 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun
     val status: AttendanceStatus = AttendanceStatus.PRESENT,
     val score: Double = 1.0, // 1 mark per day
     val dateMillis: Long = System.currentTimeMillis()
 )
+

@@ -213,7 +213,7 @@ fun DashboardScreen(
 
                     DashboardActionItem(
                         title = "Daily Attendance",
-                        subtitle = "Mark Mon-Sat attendance (1 mark/day)",
+                        subtitle = "Calendar marking, Mon–Sat (auto weekly sync)",
                         icon = Icons.Default.DateRange,
                         iconBg = Color(0xFF22C55E),
                         onClick = {
@@ -221,6 +221,18 @@ fun DashboardScreen(
                             viewModel.navigateTo(Screen.Attendance(firstBatch))
                         },
                         testTag = "dashboard_action_attendance"
+                    )
+
+                    DashboardActionItem(
+                        title = "Weekly Assessments",
+                        subtitle = "Auto Monday–Saturday weeks & marks entry",
+                        icon = Icons.Default.Assignment,
+                        iconBg = Color(0xFF0284C7),
+                        onClick = {
+                            val firstBatch = viewModel.allBatches.value.firstOrNull()?.id ?: 1L
+                            viewModel.navigateTo(Screen.WeeklyAssessments(firstBatch))
+                        },
+                        testTag = "dashboard_action_assessments"
                     )
 
                     DashboardActionItem(

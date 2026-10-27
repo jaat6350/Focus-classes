@@ -22,8 +22,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -60,6 +64,7 @@ import com.example.ui.components.FocusTopAppBar
 import com.example.ui.components.StudentAvatar
 import com.example.ui.theme.FocusBackground
 import com.example.ui.theme.FocusGold
+import com.example.ui.theme.FocusNavy
 import com.example.ui.theme.FocusPrimaryBlue
 import com.example.ui.theme.FocusTextDark
 import com.example.ui.theme.FocusTextSecondary
@@ -125,19 +130,16 @@ fun LeaderboardScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            viewModel.exportCurrentLeaderboard { csv ->
-                                val sendIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, csv)
-                                    type = "text/plain"
-                                }
-                                val shareIntent = Intent.createChooser(sendIntent, "Export Leaderboard")
-                                context.startActivity(shareIntent)
-                            }
+                            viewModel.navigateTo(
+                                Screen.LeaderboardExport(
+                                    batchId = selectedBatchId ?: 0,
+                                    assessmentId = selectedAssessment?.id ?: 0
+                                )
+                            )
                         },
                         modifier = Modifier.testTag("export_leaderboard_button")
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = "Export CSV", tint = Color.White)
+                        Icon(Icons.Default.Download, contentDescription = "Export Leaderboard", tint = Color.White)
                     }
                 }
             )
@@ -254,6 +256,39 @@ fun LeaderboardScreen(
                                 )
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.navigateTo(
+                                Screen.LeaderboardExport(
+                                    batchId = selectedBatchId ?: 0,
+                                    assessmentId = selectedAssessment?.id ?: 0
+                                )
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = FocusNavy),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("open_export_screen_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = null,
+                            tint = FocusGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Export Leaderboard (Poster / PDF)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        )
                     }
                 }
             }

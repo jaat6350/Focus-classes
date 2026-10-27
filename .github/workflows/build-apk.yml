@@ -30,21 +30,21 @@ jobs:
           java -version
           echo "=== JAVA_HOME ==="
           echo "JAVA_HOME=$JAVA_HOME"
-          
+
           JAVA_VER=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
           echo "Detected Java version string: $JAVA_VER"
           if [ -z "$JAVA_VER" ]; then
             echo "ERROR: Could not detect Java version."
             exit 1
           fi
-          
+
           JAVA_MAJOR=$(echo "$JAVA_VER" | awk -F '.' '{print ($1 == "1" ? $2 : $1)}')
           echo "Detected Java major version: $JAVA_MAJOR"
           if [ -z "$JAVA_MAJOR" ] || ! [[ "$JAVA_MAJOR" =~ ^[0-9]+$ ]]; then
             echo "ERROR: Failed to parse Java major version number."
             exit 1
           fi
-          
+
           if [ "$JAVA_MAJOR" -lt 17 ]; then
             echo "ERROR: Java major version is $JAVA_MAJOR, which is lower than the required 17."
             exit 1
@@ -177,19 +177,17 @@ jobs:
 
           echo "Creating GitHub Release with tag: $TAG_NAME"
 
-          NOTES=$(cat <<EOF
-          ### Debug APK Build
-          
-          - **Status:** Automatically generated debug APK
-          - **Built by:** GitHub Actions
-          - **Workflow Run Number:** ${GITHUB_RUN_NUMBER}
-          - **Workflow Run Attempt:** ${GITHUB_RUN_ATTEMPT}
-          - **Source Commit SHA:** ${GITHUB_SHA}
-          - **Note:** This APK is intended for testing purposes only.
-          - **Production Warning:** This APK is not a Play Store production release.
-          - **Signing:** This APK is signed only with a temporary debug keystore.
-          EOF
-          )
+          NOTES=$(printf "%s\n" \
+            "### Debug APK Build" \
+            "" \
+            "- **Status:** Automatically generated debug APK" \
+            "- **Built by:** GitHub Actions" \
+            "- **Workflow Run Number:** ${GITHUB_RUN_NUMBER}" \
+            "- **Workflow Run Attempt:** ${GITHUB_RUN_ATTEMPT}" \
+            "- **Source Commit SHA:** ${GITHUB_SHA}" \
+            "- **Note:** This APK is intended for testing purposes only." \
+            "- **Production Warning:** This APK is not a Play Store production release." \
+            "- **Signing:** This APK is signed only with a temporary debug keystore.")
 
           gh release create "$TAG_NAME" "$ASSET_PATH" \
             --title "$RELEASE_TITLE" \
@@ -220,29 +218,29 @@ jobs:
             echo "Release URL: $RELEASE_URL"
             echo "APK Asset Filename: $ASSET_FILENAME"
 
-            cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## 📱 Debug APK Available for Download
-
-          The debug APK has been built and published to GitHub Releases.
-
-          - **Release Page:** [$TITLE]($RELEASE_URL)
-          - **Release Tag:** \`$TAG\`
-          - **APK Filename:** \`$ASSET_FILENAME\`
-
-          ### How to Download
-          1. Open the [Release Page]($RELEASE_URL) on your Android phone or browser.
-          2. Expand the **Assets** section and tap **\`$ASSET_FILENAME\`** to download and install.
-          3. As a backup, the build artifact **app-debug-apk** is also available in this workflow run's Summary section.
-          EOF
+            {
+              echo "## 📱 Debug APK Available for Download"
+              echo ""
+              echo "The debug APK has been built and published to GitHub Releases."
+              echo ""
+              echo "- **Release Page:** [$TITLE]($RELEASE_URL)"
+              echo "- **Release Tag:** \`$TAG\`"
+              echo "- **APK Filename:** \`$ASSET_FILENAME\`"
+              echo ""
+              echo "### How to Download"
+              echo "1. Open the [Release Page]($RELEASE_URL) on your Android phone or browser."
+              echo "2. Expand the **Assets** section and tap **\`$ASSET_FILENAME\`** to download and install."
+              echo "3. As a backup, the build artifact **app-debug-apk** is also available in this workflow run's Summary section."
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "::warning ::GitHub Release publishing could not be completed or was skipped. However, the APK build and artifact upload succeeded."
             echo "The debug APK artifact 'app-debug-apk' remains available for download from the Actions run artifacts."
 
-            cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## ⚠️ Debug APK Build Succeeded (Release Publish Warning)
-
-          - **Build Status:** APK build and verification completed successfully.
-          - **Artifact Available:** The debug APK artifact **\`app-debug-apk\`** was uploaded and is available for download in this workflow run's Artifacts section.
-          - **Release Notice:** GitHub Release publishing could not be completed (e.g., token permissions or release creation was skipped). The APK was not lost and can be downloaded directly from the Actions artifact **\`app-debug-apk\`**.
-          EOF
+            {
+              echo "## ⚠️ Debug APK Build Succeeded (Release Publish Warning)"
+              echo ""
+              echo "- **Build Status:** APK build and verification completed successfully."
+              echo "- **Artifact Available:** The debug APK artifact **\`app-debug-apk\`** was uploaded and is available for download in this workflow run's Artifacts section."
+              echo "- **Release Notice:** GitHub Release publishing could not be completed (e.g., token permissions or release creation was skipped). The APK was not lost and can be downloaded directly from the Actions artifact **\`app-debug-apk\`**."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi

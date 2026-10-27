@@ -17,12 +17,17 @@ import com.example.data.model.StudentEntity
 import com.example.data.model.StudentWeeklyResultEntity
 import com.example.data.model.StudentWithResult
 import com.example.data.model.WeeklyAssessmentEntity
+import com.example.util.AttendanceDateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -189,7 +194,110 @@ class FocusRepository(private val context: Context) {
         categoryMarkDao.upsertMarks(marks.map { it.copy(updatedAt = System.currentTimeMillis()) })
     }
 
-    // Daily Attendance Tracking
+    // Automatic Weekly Assessment Generation
+    suspend fun ensureAssessmentForDate(batchId: Long, dateMillis: Long): WeeklyAssessmentEntity = withContext(Dispatchers.IO) {
+        val weekLabel = AttendanceDateUtils.getWeekLabel(dateMillis)
+        val mondayMillis = AttendanceDateUtils.getMondayMillis(dateMillis)
+        val saturdayMillis = AttendanceDateUtils.getSaturdayMillis(dateMillis)
+
+        val existing = assessmentDao.findAssessmentCoveringDate(batchId, dateMillis)
+            ?: assessmentDao.findAssessmentByLabel(batchId, weekLabel)
+        if (existing != null) {
+            return@withContext existing
+        }
+
+        val newAssessment = WeeklyAssessmentEntity(
+            batchId = batchId,
+            weekLabel = weekLabel,
+            startDate = mondayMillis,
+            endDate = saturdayMillis,
+            testMaxMarks = 20.0,
+            createdAt = System.currentTimeMillis()
+        )
+        val newId = assessmentDao.insertAssessment(newAssessment)
+        newAssessment.copy(id = newId)
+    }
+
+    suspend fun ensureCurrentWeekAssessment(batchId: Long): WeeklyAssessmentEntity {
+        return ensureAssessmentForDate(batchId, System.currentTimeMillis())
+    }
+
+    suspend fun ensureWeeklyAssessmentsForAllBatches(dateMillis: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) {
+        val batches = batchDao.getAllBatchesDirect()
+        batches.forEach { batch ->
+            ensureAssessmentForDate(batch.id, dateMillis)
+        }
+    }
+
+    // Daily Attendance Tracking by Calendar Date
+    fun getAttendanceForBatchAndDate(batchId: Long, dateString: String): Flow<List<DailyAttendanceEntity>> =
+        attendanceDao.getAttendanceForBatchAndDate(batchId, dateString).flowOn(Dispatchers.IO)
+
+    suspend fun getAttendanceForBatchAndDateDirect(batchId: Long, dateString: String): List<DailyAttendanceEntity> =
+        withContext(Dispatchers.IO) {
+            attendanceDao.getAttendanceForBatchAndDateDirect(batchId, dateString)
+        }
+
+    fun getStudentAttendanceHistory(studentId: Long): Flow<List<DailyAttendanceEntity>> =
+        attendanceDao.getAttendanceHistoryForStudent(studentId).flowOn(Dispatchers.IO)
+
+    suspend fun getStudentAttendanceHistoryDirect(studentId: Long): List<DailyAttendanceEntity> =
+        withContext(Dispatchers.IO) {
+            attendanceDao.getAttendanceHistoryForStudentDirect(studentId)
+        }
+
+    suspend fun saveDailyAttendance(
+        records: List<DailyAttendanceEntity>,
+        batchId: Long,
+        dateMillis: Long
+    ) = withContext(Dispatchers.IO) {
+        if (records.isEmpty()) return@withContext
+
+        // Ensure weekly assessment exists covering this date
+        val assessment = ensureAssessmentForDate(batchId, dateMillis)
+        val dateString = AttendanceDateUtils.toDateString(dateMillis)
+        val dayOfWeek = AttendanceDateUtils.getDayOfWeek(dateMillis)
+
+        val preparedRecords = records.map {
+            it.copy(
+                batchId = batchId,
+                assessmentId = assessment.id,
+                dateString = if (it.dateString.isBlank()) dateString else it.dateString,
+                dateMillis = if (it.dateMillis == 0L) dateMillis else it.dateMillis,
+                dayOfWeek = dayOfWeek
+            )
+        }
+
+        attendanceDao.upsertAttendanceBatch(preparedRecords)
+
+        // Recalculate attendance marks for all affected students for this weekly assessment
+        val studentIds = records.map { it.studentId }.distinct()
+        val mon = AttendanceDateUtils.getMondayMillis(dateMillis)
+        val sat = AttendanceDateUtils.getSaturdayMillis(dateMillis)
+
+        for (sId in studentIds) {
+            val weekRecords = attendanceDao.getStudentAttendanceForAssessmentDirect(sId, assessment.id)
+                .ifEmpty { attendanceDao.getStudentAttendanceBetween(sId, mon, sat) }
+            val score = AttendanceDateUtils.calculateAttendanceScore(weekRecords)
+
+            val existingResult = resultDao.getResult(sId, assessment.id)
+            val updatedResult = if (existingResult != null) {
+                existingResult.copy(
+                    attendanceMarks = score,
+                    updatedAt = System.currentTimeMillis()
+                )
+            } else {
+                StudentWeeklyResultEntity(
+                    studentId = sId,
+                    assessmentId = assessment.id,
+                    attendanceMarks = score
+                )
+            }
+            resultDao.upsertResult(updatedResult)
+        }
+    }
+
+    // Daily Attendance Tracking (Day of week support)
     fun getDailyAttendance(
         batchId: Long,
         assessmentId: Long,
@@ -202,30 +310,9 @@ class FocusRepository(private val context: Context) {
         batchId: Long,
         assessmentId: Long
     ) = withContext(Dispatchers.IO) {
-        attendanceDao.upsertAttendanceBatch(records)
-
-        // Automatically calculate each student's weekly attendance mark based on inserted daily data!
-        val studentIds = records.map { it.studentId }.distinct()
-        for (sId in studentIds) {
-            val totalScore = attendanceDao.calculateWeeklyAttendanceScore(sId, assessmentId) ?: 0.0
-            val cappedScore = totalScore.coerceIn(0.0, 6.0)
-
-            // Update StudentWeeklyResultEntity
-            val existingResult = resultDao.getResult(sId, assessmentId)
-            val updatedResult = if (existingResult != null) {
-                existingResult.copy(
-                    attendanceMarks = cappedScore,
-                    updatedAt = System.currentTimeMillis()
-                )
-            } else {
-                StudentWeeklyResultEntity(
-                    studentId = sId,
-                    assessmentId = assessmentId,
-                    attendanceMarks = cappedScore
-                )
-            }
-            resultDao.upsertResult(updatedResult)
-        }
+        val assessment = assessmentDao.getAssessmentById(assessmentId)
+        val dateMillis = assessment?.startDate ?: System.currentTimeMillis()
+        saveDailyAttendance(records, batchId, dateMillis)
     }
 
     // Scoring Config
@@ -279,7 +366,7 @@ class FocusRepository(private val context: Context) {
         ScoringEngine.rankStudentsDynamic(studentsWithResults, categories, filter)
     }.flowOn(Dispatchers.IO)
 
-    // Save profile image to local app storage
+    // Save profile image to local app storage with EXIF orientation normalization
     suspend fun copyImageToLocalStorage(imageUri: Uri): String = withContext(Dispatchers.IO) {
         val imagesDir = File(context.filesDir, "student_photos")
         if (!imagesDir.exists()) {
@@ -288,11 +375,51 @@ class FocusRepository(private val context: Context) {
         val filename = "student_${UUID.randomUUID()}.jpg"
         val destinationFile = File(imagesDir, filename)
 
-        context.contentResolver.openInputStream(imageUri)?.use { input ->
-            FileOutputStream(destinationFile).use { output ->
-                input.copyTo(output)
+        try {
+            context.contentResolver.openInputStream(imageUri)?.use { input ->
+                FileOutputStream(destinationFile).use { output ->
+                    input.copyTo(output)
+                }
             }
+
+            // Check if photo contains EXIF orientation from phone camera
+            val exif = ExifInterface(destinationFile.absolutePath)
+            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            if (orientation != ExifInterface.ORIENTATION_NORMAL && orientation != ExifInterface.ORIENTATION_UNDEFINED) {
+                val matrix = Matrix()
+                when (orientation) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                    ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                    ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                    ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+                    ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+                    ExifInterface.ORIENTATION_TRANSPOSE -> {
+                        matrix.postRotate(90f)
+                        matrix.postScale(-1f, 1f)
+                    }
+                    ExifInterface.ORIENTATION_TRANSVERSE -> {
+                        matrix.postRotate(270f)
+                        matrix.postScale(-1f, 1f)
+                    }
+                }
+                val originalBitmap = BitmapFactory.decodeFile(destinationFile.absolutePath)
+                if (originalBitmap != null) {
+                    val rotatedBitmap = Bitmap.createBitmap(
+                        originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true
+                    )
+                    FileOutputStream(destinationFile).use { out ->
+                        rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                    }
+                    if (rotatedBitmap != originalBitmap) {
+                        rotatedBitmap.recycle()
+                    }
+                    originalBitmap.recycle()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+
         destinationFile.absolutePath
     }
 

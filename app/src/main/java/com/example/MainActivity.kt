@@ -25,6 +25,7 @@ import com.example.ui.screens.BatchStudentsScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.BatchesScreen
 import com.example.ui.screens.EditMarksScreen
+import com.example.ui.screens.LeaderboardExportScreen
 import com.example.ui.screens.LeaderboardScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SplashScreen
@@ -124,6 +125,13 @@ class MainActivity : ComponentActivity() {
                             is Screen.Leaderboard -> {
                                 LeaderboardScreen(
                                     defaultBatchId = screen.defaultBatchId,
+                                    viewModel = viewModel
+                                )
+                            }
+                            is Screen.LeaderboardExport -> {
+                                LeaderboardExportScreen(
+                                    initialBatchId = screen.batchId,
+                                    initialAssessmentId = screen.assessmentId,
                                     viewModel = viewModel
                                 )
                             }

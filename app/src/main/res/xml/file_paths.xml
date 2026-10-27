@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="exports_cache" path="exports/" />
+    <files-path name="exports_files" path="exports/" />
+    <external-files-path name="exports_external" path="exports/" />
+    <external-cache-path name="exports_ext_cache" path="exports/" />
+</paths>

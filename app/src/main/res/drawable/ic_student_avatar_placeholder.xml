@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Circular Background -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M48,0A48,48 0 1,0 48,96A48,48 0 1,0 48,0Z" />
+    
+    <!-- Body / Shoulders (Navy/Royal School Uniform) -->
+    <path
+        android:fillColor="#1459B3"
+        android:pathData="M48,56 C32,56 18,68 16,84 C24.5,91.5 35.8,96 48,96 C60.2,96 71.5,91.5 80,84 C78,68 64,56 48,56 Z" />
+    
+    <!-- Collar (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,68 L40,58 L48,56 L56,58 Z" />
+    
+    <!-- Neck -->
+    <path
+        android:fillColor="#FBD5B5"
+        android:pathData="M43,46 L53,46 L53,58 L43,58 Z" />
+    
+    <!-- Head / Face -->
+    <path
+        android:fillColor="#FDDEBE"
+        android:pathData="M48,18 C37,18 29,26 29,38 C29,50 37,54 48,54 C59,54 67,50 67,38 C67,26 59,18 48,18 Z" />
+    
+    <!-- Hair (Friendly Neat Style) -->
+    <path
+        android:fillColor="#2D3748"
+        android:pathData="M48,14 C35,14 27,22 27,33 C27,34 31,31 35,32 C40,27 48,27 52,31 C57,28 65,30 69,34 C69,22 61,14 48,14 Z" />
+    
+    <!-- Smiling Eyes -->
+    <path
+        android:fillColor="#2D3748"
+        android:pathData="M38,36 A3,3 0 1,1 38,36.01" />
+    <path
+        android:fillColor="#2D3748"
+        android:pathData="M58,36 A3,3 0 1,1 58,36.01" />
+    
+    <!-- Friendly Smile -->
+    <path
+        android:fillColor="#E53E3E"
+        android:pathData="M43,44 C44,47 52,47 53,44 C53,44 48,48 43,44 Z" />
+</vector>

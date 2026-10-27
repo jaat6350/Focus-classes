@@ -21,6 +21,9 @@ interface BatchDao {
     @Query("SELECT * FROM batches WHERE isArchived = 0 ORDER BY grade ASC, name ASC")
     fun getAllBatches(): Flow<List<BatchEntity>>
 
+    @Query("SELECT * FROM batches WHERE isArchived = 0 ORDER BY grade ASC, name ASC")
+    suspend fun getAllBatchesDirect(): List<BatchEntity>
+
     @Query("SELECT * FROM batches WHERE id = :batchId LIMIT 1")
     suspend fun getBatchById(batchId: Long): BatchEntity?
 
@@ -89,6 +92,12 @@ interface AssessmentDao {
 
     @Query("SELECT * FROM weekly_assessments WHERE id = :assessmentId LIMIT 1")
     fun getAssessmentFlow(assessmentId: Long): Flow<WeeklyAssessmentEntity?>
+
+    @Query("SELECT * FROM weekly_assessments WHERE batchId = :batchId AND startDate <= :dateMillis AND endDate >= :dateMillis LIMIT 1")
+    suspend fun findAssessmentCoveringDate(batchId: Long, dateMillis: Long): WeeklyAssessmentEntity?
+
+    @Query("SELECT * FROM weekly_assessments WHERE batchId = :batchId AND weekLabel = :weekLabel LIMIT 1")
+    suspend fun findAssessmentByLabel(batchId: Long, weekLabel: String): WeeklyAssessmentEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAssessment(assessment: WeeklyAssessmentEntity): Long
@@ -206,4 +215,22 @@ interface AttendanceDao {
 
     @Query("SELECT SUM(score) FROM daily_attendance WHERE studentId = :studentId AND assessmentId = :assessmentId")
     suspend fun calculateWeeklyAttendanceScore(studentId: Long, assessmentId: Long): Double?
+
+    @Query("SELECT * FROM daily_attendance WHERE batchId = :batchId AND dateString = :dateString")
+    fun getAttendanceForBatchAndDate(batchId: Long, dateString: String): Flow<List<DailyAttendanceEntity>>
+
+    @Query("SELECT * FROM daily_attendance WHERE batchId = :batchId AND dateString = :dateString")
+    suspend fun getAttendanceForBatchAndDateDirect(batchId: Long, dateString: String): List<DailyAttendanceEntity>
+
+    @Query("SELECT * FROM daily_attendance WHERE studentId = :studentId ORDER BY dateMillis DESC")
+    fun getAttendanceHistoryForStudent(studentId: Long): Flow<List<DailyAttendanceEntity>>
+
+    @Query("SELECT * FROM daily_attendance WHERE studentId = :studentId ORDER BY dateMillis DESC")
+    suspend fun getAttendanceHistoryForStudentDirect(studentId: Long): List<DailyAttendanceEntity>
+
+    @Query("SELECT * FROM daily_attendance WHERE studentId = :studentId AND dateMillis BETWEEN :startMillis AND :endMillis")
+    suspend fun getStudentAttendanceBetween(studentId: Long, startMillis: Long, endMillis: Long): List<DailyAttendanceEntity>
+
+    @Query("SELECT * FROM daily_attendance WHERE batchId = :batchId AND dateMillis BETWEEN :startMillis AND :endMillis")
+    suspend fun getBatchAttendanceBetween(batchId: Long, startMillis: Long, endMillis: Long): List<DailyAttendanceEntity>
 }

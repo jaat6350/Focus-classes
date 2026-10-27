@@ -19,6 +19,8 @@ import com.example.data.model.StudentWeeklyResultEntity
 import com.example.data.model.StudentWithResult
 import com.example.data.model.WeeklyAssessmentEntity
 import com.example.data.repository.FocusRepository
+import com.example.util.AttendanceDateUtils
+import com.example.util.AttendanceSummaryStats
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +43,8 @@ sealed class Screen {
     data class AddEditAssessment(val assessmentId: Long = 0, val defaultBatchId: Long = 0) : Screen()
     data class MarksEntry(val batchId: Long, val assessmentId: Long, val currentStudentId: Long = 0) : Screen()
     data class Leaderboard(val defaultBatchId: Long = 0) : Screen()
-    data class Attendance(val batchId: Long = 0, val assessmentId: Long = 0) : Screen()
+    data class LeaderboardExport(val batchId: Long = 0, val assessmentId: Long = 0) : Screen()
+    data class Attendance(val batchId: Long = 0, val assessmentId: Long = 0, val initialDateMillis: Long = 0L) : Screen()
     object CustomCategories : Screen()
     object Settings : Screen()
     object BackupRestore : Screen()
@@ -49,6 +52,16 @@ sealed class Screen {
 
 class FocusViewModel(application: Application) : AndroidViewModel(application) {
     val repository = FocusRepository(application)
+
+    init {
+        viewModelScope.launch {
+            try {
+                repository.ensureWeeklyAssessmentsForAllBatches()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     // Navigation Backstack
     private val _screenStack = MutableStateFlow<List<Screen>>(listOf(Screen.Splash))
@@ -233,19 +246,65 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         else repository.getDynamicLeaderboard(bId, aId, filter)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Daily Attendance Tracking
-    val selectedDayOfWeek = MutableStateFlow(1) // 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-    fun setDayOfWeek(day: Int) { selectedDayOfWeek.value = day }
+    // Daily Calendar Attendance Tracking
+    val selectedDateMillis = MutableStateFlow(System.currentTimeMillis())
+    val selectedDateString = selectedDateMillis.flatMapLatest { millis ->
+        flowOf(AttendanceDateUtils.toDateString(millis))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AttendanceDateUtils.toDateString(System.currentTimeMillis()))
 
-    val dailyAttendanceRecords = combine(
+    val selectedDayOfWeek = MutableStateFlow(AttendanceDateUtils.getDayOfWeek(System.currentTimeMillis()))
+
+    fun setSelectedDate(millis: Long) {
+        selectedDateMillis.value = millis
+        selectedDayOfWeek.value = AttendanceDateUtils.getDayOfWeek(millis)
+        viewModelScope.launch {
+            val a = repository.ensureAssessmentForDate(selectedBatchId.value, millis)
+            selectedAssessmentId.value = a.id
+        }
+    }
+
+    fun previousDay() {
+        setSelectedDate(AttendanceDateUtils.addDays(selectedDateMillis.value, -1))
+    }
+
+    fun nextDay() {
+        setSelectedDate(AttendanceDateUtils.addDays(selectedDateMillis.value, 1))
+    }
+
+    fun jumpToToday() {
+        setSelectedDate(System.currentTimeMillis())
+    }
+
+    fun setDayOfWeek(day: Int) {
+        selectedDayOfWeek.value = day
+        val mon = AttendanceDateUtils.getMondayMillis(selectedDateMillis.value)
+        val newDate = AttendanceDateUtils.addDays(mon, day - 1)
+        selectedDateMillis.value = newDate
+        viewModelScope.launch {
+            val a = repository.ensureAssessmentForDate(selectedBatchId.value, newDate)
+            selectedAssessmentId.value = a.id
+        }
+    }
+
+    val calendarAttendanceRecords: StateFlow<List<DailyAttendanceEntity>> = combine(
+        selectedBatchId,
+        selectedDateString
+    ) { bId: Long, dateStr: String ->
+        Pair(bId, dateStr)
+    }.flatMapLatest { pair: Pair<Long, String> ->
+        repository.getAttendanceForBatchAndDate(pair.first, pair.second)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dailyAttendanceRecords: StateFlow<List<DailyAttendanceEntity>> = combine(
         selectedBatchId,
         selectedAssessmentId,
         selectedDayOfWeek
-    ) { bId, aId, day ->
+    ) { bId: Long, aId: Long?, day: Int ->
         Triple(bId, aId, day)
-    }.flatMapLatest { (bId, aId, day) ->
+    }.flatMapLatest { triple: Triple<Long, Long?, Int> ->
+        val aId = triple.second
         if (aId == null) flowOf(emptyList())
-        else repository.getDailyAttendance(bId, aId, day)
+        else repository.getDailyAttendance(triple.first, aId, triple.third)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun markStudentAttendance(
@@ -253,27 +312,29 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         status: AttendanceStatus
     ) {
         val bId = selectedBatchId.value
-        val aId = selectedAssessmentId.value ?: return
-        val day = selectedDayOfWeek.value
+        val dateMillis = selectedDateMillis.value
+        val dateStr = AttendanceDateUtils.toDateString(dateMillis)
+        val day = AttendanceDateUtils.getDayOfWeek(dateMillis)
 
         viewModelScope.launch {
             val record = DailyAttendanceEntity(
                 studentId = studentId,
                 batchId = bId,
-                assessmentId = aId,
+                dateString = dateStr,
                 dayOfWeek = day,
                 status = status,
                 score = status.score,
-                dateMillis = System.currentTimeMillis()
+                dateMillis = dateMillis
             )
-            repository.recordAttendanceBatch(listOf(record), bId, aId)
+            repository.saveDailyAttendance(listOf(record), bId, dateMillis)
         }
     }
 
     fun markAllStudentsAttendance(status: AttendanceStatus) {
         val bId = selectedBatchId.value
-        val aId = selectedAssessmentId.value ?: return
-        val day = selectedDayOfWeek.value
+        val dateMillis = selectedDateMillis.value
+        val dateStr = AttendanceDateUtils.toDateString(dateMillis)
+        val day = AttendanceDateUtils.getDayOfWeek(dateMillis)
         val students = studentsInBatch.value
 
         viewModelScope.launch {
@@ -281,15 +342,23 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
                 DailyAttendanceEntity(
                     studentId = s.id,
                     batchId = bId,
-                    assessmentId = aId,
+                    dateString = dateStr,
                     dayOfWeek = day,
                     status = status,
                     score = status.score,
-                    dateMillis = System.currentTimeMillis()
+                    dateMillis = dateMillis
                 )
             }
-            repository.recordAttendanceBatch(records, bId, aId)
-            showMessage("Marked all students as ${status.label} for Day $day")
+            repository.saveDailyAttendance(records, bId, dateMillis)
+            showMessage("Marked all as ${status.label} for ${AttendanceDateUtils.formatDisplayDate(dateStr)}")
+        }
+    }
+
+    fun ensureCurrentWeekAssessmentForBatch(batchId: Long, onReady: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            val assessment = repository.ensureCurrentWeekAssessment(batchId)
+            selectedAssessmentId.value = assessment.id
+            onReady(assessment.id)
         }
     }
 

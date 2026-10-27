@@ -54,9 +54,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.AttendanceStatus
+import com.example.data.model.DailyAttendanceEntity
 import com.example.data.model.StudentEntity
 import com.example.data.model.StudentWeeklyResultEntity
 import com.example.data.model.WeeklyAssessmentEntity
+import com.example.util.AttendanceDateUtils
 import com.example.ui.components.CategoryBadge
 import com.example.ui.components.FocusTopAppBar
 import com.example.ui.components.StudentAvatar
@@ -69,6 +72,7 @@ import com.example.ui.theme.FocusGold
 import com.example.ui.theme.FocusPrimaryBlue
 import com.example.ui.theme.FocusTextDark
 import com.example.ui.theme.FocusTextSecondary
+import com.example.ui.theme.FocusWarningAmber
 import com.example.ui.viewmodel.FocusViewModel
 import com.example.ui.viewmodel.Screen
 import java.util.Locale
@@ -86,6 +90,7 @@ fun StudentProfileScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val config by viewModel.scoringConfig.collectAsState()
+    val studentAttendanceHistory by viewModel.repository.getStudentAttendanceHistory(studentId).collectAsState(initial = emptyList())
 
     LaunchedEffect(studentId) {
         val s = viewModel.repository.getStudentById(studentId)
@@ -483,6 +488,199 @@ fun StudentProfileScreen(
                     }
                 }
             }
+
+            // Attendance Record & History Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("student_attendance_history_card")
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        val stats = remember(studentAttendanceHistory) {
+                            AttendanceDateUtils.calculateSummaryStats(studentAttendanceHistory)
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = null,
+                                    tint = CategoryAttendance,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Attendance Record",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FocusTextDark
+                                )
+                            }
+
+                            if (stats.percentage != null) {
+                                val badgeColor = when {
+                                    stats.percentage >= 85.0 -> Color(0xFF16A34A)
+                                    stats.percentage >= 70.0 -> FocusWarningAmber
+                                    else -> FocusErrorRed
+                                }
+                                val badgeBg = when {
+                                    stats.percentage >= 85.0 -> Color(0xFFDCFCE7)
+                                    stats.percentage >= 70.0 -> Color(0xFFFEF3C7)
+                                    else -> Color(0xFFFEE2E2)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(badgeBg)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = String.format(Locale.US, "%.1f%% Attendance", stats.percentage),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = badgeColor
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // 4 Summary Metrics: Total, Present, Absent, Leave
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AttendanceMetricBox(
+                                label = "Total Days",
+                                value = stats.totalRecords.toString(),
+                                color = FocusTextDark,
+                                bgColor = Color(0xFFF1F5F9),
+                                modifier = Modifier.weight(1f)
+                            )
+                            AttendanceMetricBox(
+                                label = "Present",
+                                value = stats.presentCount.toString(),
+                                color = Color(0xFF16A34A),
+                                bgColor = Color(0xFFDCFCE7),
+                                modifier = Modifier.weight(1f)
+                            )
+                            AttendanceMetricBox(
+                                label = "Absent",
+                                value = stats.absentCount.toString(),
+                                color = FocusErrorRed,
+                                bgColor = Color(0xFFFEE2E2),
+                                modifier = Modifier.weight(1f)
+                            )
+                            AttendanceMetricBox(
+                                label = "Leave",
+                                value = stats.leaveCount.toString(),
+                                color = FocusWarningAmber,
+                                bgColor = Color(0xFFFEF3C7),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "Recent Daily Log",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = FocusTextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (studentAttendanceHistory.isEmpty()) {
+                            Text(
+                                text = "No daily attendance marked for this student yet.",
+                                fontSize = 13.sp,
+                                color = FocusTextSecondary,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                studentAttendanceHistory.take(7).forEach { record ->
+                                    val statusColor = when (record.status) {
+                                        AttendanceStatus.PRESENT -> Color(0xFF16A34A)
+                                        AttendanceStatus.ABSENT -> FocusErrorRed
+                                        AttendanceStatus.LEAVE -> FocusWarningAmber
+                                        AttendanceStatus.LATE -> FocusWarningAmber
+                                    }
+                                    val statusBg = when (record.status) {
+                                        AttendanceStatus.PRESENT -> Color(0xFFDCFCE7)
+                                        AttendanceStatus.ABSENT -> Color(0xFFFEE2E2)
+                                        AttendanceStatus.LEAVE -> Color(0xFFFEF3C7)
+                                        AttendanceStatus.LATE -> Color(0xFFFEF3C7)
+                                    }
+                                    val dayName = AttendanceDateUtils.getDayName(record.dayOfWeek)
+                                    val dateDisplay = if (record.dateString.isNotBlank()) {
+                                        AttendanceDateUtils.formatDisplayDate(record.dateString)
+                                    } else {
+                                        AttendanceDateUtils.formatDisplayDate(record.dateMillis)
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFF8FAFC))
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "$dayName, $dateDisplay",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = FocusTextDark
+                                        )
+
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(statusBg)
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = record.status.label,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = statusColor
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = {
+                                student?.let { s ->
+                                    viewModel.setBatch(s.batchId)
+                                    viewModel.navigateTo(Screen.Attendance(s.batchId))
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CategoryAttendance),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Open Daily Attendance Sheet", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -548,5 +746,37 @@ fun PerformanceRowItem(
             trackColor = color.copy(alpha = 0.15f),
             strokeCap = StrokeCap.Round
         )
+    }
+}
+
+@Composable
+fun AttendanceMetricBox(
+    label: String,
+    value: String,
+    color: Color,
+    bgColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = value,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = color
+            )
+        }
     }
 }
